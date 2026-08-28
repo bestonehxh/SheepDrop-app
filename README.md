@@ -81,6 +81,7 @@ SheepDrop is one of a set of small native macOS apps that share the same sheep i
 | <img src="https://raw.githubusercontent.com/bestonehxh/SheepTap-app/main/.github/icon.png" width="44" alt=""> | [SheepTap](https://github.com/bestonehxh/SheepTap-app) | Menu-bar viewer for your Mac's network interfaces with click-to-copy |
 | <img src="https://raw.githubusercontent.com/bestonehxh/SheepPing-app/main/.github/icon.png" width="44" alt=""> | [SheepPing](https://github.com/bestonehxh/SheepPing-app) | Continuous multi-host ping monitor with per-host logs and CSV export |
 | <img src="https://raw.githubusercontent.com/bestonehxh/SheepText-app/main/.github/icon.png" width="44" alt=""> | [SheepText](https://github.com/bestonehxh/SheepText-app) | Fast text editor with tree-sitter highlighting and a JavaScript plugin system |
+| <img src="https://raw.githubusercontent.com/bestonehxh/SheepArt-app/main/.github/icon.png" width="44" alt=""> | [SheepArt](https://github.com/bestonehxh/SheepArt-app) | Screenshot annotation — draw, crop, layers, one-key background removal |
 
 ## Acknowledgements
 
