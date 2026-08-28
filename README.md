@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/icon.png" width="128" alt="SheepDrop app icon">
+  <img src=".github/icon.png?v=2" width="128" alt="SheepDrop app icon">
 </p>
 
 # 🐑 SheepDrop
@@ -76,7 +76,7 @@ SheepDrop is one of a set of small native macOS apps that share the same sheep i
 
 |  | App | What it does |
 |---|---|---|
-| <img src="https://raw.githubusercontent.com/bestonehxh/SheepDrop-app/main/.github/icon.png" width="44" alt=""> | [SheepDrop](https://github.com/bestonehxh/SheepDrop-app) | SFTP / SCP / FTP / TFTP file transfer — client and built-in server |
+| <img src="https://raw.githubusercontent.com/bestonehxh/SheepDrop-app/main/.github/icon.png?v=2" width="44" alt=""> | [SheepDrop](https://github.com/bestonehxh/SheepDrop-app) | SFTP / SCP / FTP / TFTP file transfer — client and built-in server |
 | <img src="https://raw.githubusercontent.com/bestonehxh/SheepTerm-app/main/.github/icon.png" width="44" alt=""> | [SheepTerm](https://github.com/bestonehxh/SheepTerm-app) | SSH / Serial / local-shell terminal for network engineers |
 | <img src="https://raw.githubusercontent.com/bestonehxh/SheepTap-app/main/.github/icon.png" width="44" alt=""> | [SheepTap](https://github.com/bestonehxh/SheepTap-app) | Menu-bar viewer for your Mac's network interfaces with click-to-copy |
 | <img src="https://raw.githubusercontent.com/bestonehxh/SheepPing-app/main/.github/icon.png" width="44" alt=""> | [SheepPing](https://github.com/bestonehxh/SheepPing-app) | Continuous multi-host ping monitor with per-host logs and CSV export |
