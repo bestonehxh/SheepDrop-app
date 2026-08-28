@@ -133,7 +133,7 @@ struct SidebarView: View {
             serverStatusRow(name: "TFTP", running: model.tftpServerRunning,
                             detail: model.tftpServerRunning ? "port \(model.tftpActualPort.map(String.init) ?? "69")" : "off")
             serverStatusRow(name: "SFTP / SCP", running: model.sftpServerRunning,
-                            detail: model.sftpServerRunning ? "port \(model.sftpActualPort.map(String.init) ?? "2222")" : "off")
+                            detail: model.sftpServerRunning ? "port \(model.sftpActualPort.map(String.init) ?? "22")" : "off")
             serverStatusRow(name: "FTP", running: model.ftpServerRunning,
                             detail: model.ftpServerRunning ? "port \(model.ftpActualPort.map(String.init) ?? "21")" : "off")
             Text("Configure and toggle each server in the panel on the right.")

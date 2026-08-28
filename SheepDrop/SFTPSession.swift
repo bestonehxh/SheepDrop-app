@@ -168,7 +168,10 @@ final class SFTPSession: ObservableObject {
                     hostKeyNotice = try await worker.connect(config)
                 }
                 if remember, let password, !password.isEmpty {
-                    Keychain.setPassword(password, account: Keychain.account(for: host))
+                    // securityd IPC (and a possible re-sign prompt) can block —
+                    // keep it off the main actor, like the read path already is.
+                    let account = Keychain.account(for: host)
+                    await Task.detached { _ = Keychain.setPassword(password, account: account) }.value
                 }
                 notice = hostKeyNotice
                 tab?.status = .connected(cipher: "")
@@ -191,8 +194,9 @@ final class SFTPSession: ObservableObject {
                 authError = password == nil || password?.isEmpty == true
                     ? nil : error.message
                 // A stored password that no longer works must not loop
-                // silently — drop it and ask.
-                Keychain.deletePassword(account: Keychain.account(for: host))
+                // silently — drop it and ask. Off the main actor (securityd IPC).
+                let account = Keychain.account(for: host)
+                await Task.detached { Keychain.deletePassword(account: account) }.value
                 needsPassword = true
             } catch {
                 isLoading = false
@@ -237,7 +241,11 @@ final class SFTPSession: ObservableObject {
         Task {
             let target: String
             if trimmed.isEmpty || trimmed == "~" {
-                target = (try? await worker.homeDirectory()) ?? "/"
+                // Home is protocol-specific — the SFTP worker isn't connected on
+                // an FTP session, so ask the FTP control channel there.
+                target = isFTP
+                    ? ((try? await ftp.currentDirectory()) ?? "/")
+                    : ((try? await worker.homeDirectory()) ?? "/")
             } else if trimmed.hasPrefix("/") {
                 target = trimmed
             } else {
@@ -436,9 +444,17 @@ final class SFTPSession: ObservableObject {
         }
         if let posix = error as? POSIXError { return dead.contains(posix.code) }
         if let message = (error as? SFTPError)?.message.lowercased() {
-            return message.contains("not connected")
-                || message.contains("connection closed")
-                || message.contains("disconnect")
+            // libssh reports a dropped transport with strings like
+            // "Socket error: Connection reset by peer" / "Timeout" — wrapped by
+            // doList as "cannot open <path>: <that>". Match the real transport-
+            // death tokens, not just the three we happened to see first, or a
+            // mid-session reset leaves the tab stuck "connected" on a stale list.
+            let dead = ["not connected", "connection closed", "disconnect",
+                        "socket error", "reset by peer", "connection reset",
+                        "broken pipe", "timed out", "timeout", "no route to host",
+                        "network is down", "network is unreachable",
+                        "connection refused", "end of file", "channel is closed"]
+            return dead.contains { message.contains($0) }
         }
         return false
     }

@@ -33,26 +33,36 @@ nonisolated final class SCPServerHandler {
         self.onProgress = onProgress
     }
 
+    /// The transfer in flight on this connection, and whether it finished — so
+    /// the `run()` defer can mark an interrupted transfer's own bar `.failed`
+    /// (id-scoped) instead of clobbering whatever bar happens to be showing.
+    private var lastActive: ServeTransfer?
+    private var completed = false
+
     /// Push a progress update at most every 128 KB (and always at 100%), so a
     /// large firmware image doesn't flood the main actor.
     private func reportProgress(name: String, isUpload: Bool, done: Int64, total: Int64,
                                 lastReported: inout Int64) {
+        let t = ServeTransfer(peer: peer, name: name, isUpload: isUpload, done: done, total: total)
+        lastActive = t
         if done - lastReported >= 128 * 1024 || done >= total {
             lastReported = done
-            onProgress(ServeTransfer(peer: peer, name: name, isUpload: isUpload, done: done, total: total))
+            onProgress(t)
         }
     }
 
-    /// Mark the bar complete; it is kept as a history row (the `run()` defer's
-    /// `onProgress(nil)` finalize leaves a `.done` transfer in place).
+    /// Mark the bar complete; it is kept as a history row.
     private func reportDone(name: String, isUpload: Bool, total: Int64) {
+        completed = true
         onProgress(ServeTransfer(peer: peer, name: name, isUpload: isUpload,
                                  done: total, total: total, state: .done))
     }
 
     func run() {
         defer {
-            onProgress(nil)                 // clear the live bar
+            // If a transfer was in flight and never completed, fail ITS bar
+            // (id-scoped); a browse/handshake-only connection touched no bar.
+            if var t = lastActive, !completed { t.state = .failed; onProgress(t) }
             ssh_channel_send_eof(channel)
             ssh_channel_close(channel)
         }

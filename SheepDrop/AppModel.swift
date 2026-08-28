@@ -366,9 +366,11 @@ final class AppModel: ObservableObject {
         Task {
             do {
                 let port = try await server.start()
+                guard ftpServer === server else { server.stop(); return }
                 ftpActualPort = port
                 ftpServerRunning = true
             } catch {
+                guard ftpServer === server else { return }
                 ftpServer = nil
                 ftpServerRunning = false
                 let message = (error as? SFTPError)?.message ?? error.localizedDescription
@@ -390,11 +392,17 @@ final class AppModel: ObservableObject {
         { transfer in
             Task { @MainActor in
                 let model = AppModel.shared
-                if let transfer {
+                guard let transfer else { return }   // bare nil no longer used
+                switch transfer.state {
+                case .active, .done:
                     model.activeServeTransfer = transfer
-                } else if var current = model.activeServeTransfer, current.state == .active {
-                    current.state = .failed
-                    model.activeServeTransfer = current
+                case .failed:
+                    // Only fail the shown bar if it IS this transfer. Without the
+                    // id check, one connection ending would flip an unrelated
+                    // concurrent transfer's live bar to "failed", or clobber a
+                    // just-completed .done held as history.
+                    if let cur = model.activeServeTransfer, cur.id != transfer.id { return }
+                    model.activeServeTransfer = transfer
                 }
             }
         }
@@ -440,9 +448,14 @@ final class AppModel: ObservableObject {
         Task {
             do {
                 let port = try await server.start()
+                // The user may have toggled off (and started a new server)
+                // while the bind was in flight — only publish "running" if this
+                // is still the current server, else stop the one we just bound.
+                guard sftpServer === server else { server.stop(); return }
                 sftpActualPort = port
                 sftpServerRunning = true
             } catch {
+                guard sftpServer === server else { return }
                 sftpServer = nil
                 sftpServerRunning = false
                 let message = (error as? SFTPError)?.message ?? error.localizedDescription
@@ -487,9 +500,11 @@ final class AppModel: ObservableObject {
         Task {
             do {
                 let port = try await server.start()
+                guard tftpServer === server else { server.stop(); return }
                 tftpActualPort = port
                 tftpServerRunning = true
             } catch {
+                guard tftpServer === server else { return }
                 tftpServer = nil
                 tftpServerRunning = false
                 tftpStartError = "Couldn't start: \(error.localizedDescription)"

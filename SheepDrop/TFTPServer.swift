@@ -394,17 +394,23 @@ nonisolated final class TFTPServer: @unchecked Sendable {
 
         // Queue-confined; throttled to ~128 KB so a big image doesn't flood.
         private var lastReported = 0
+        // The in-flight transfer + whether it finished, so finish() fails only
+        // THIS transfer's bar (id-scoped) rather than clobbering another peer's.
+        private var lastActive: ServeTransfer?
+        private var transferDone = false
         private func reportProgress(done: Int, total: Int, isUpload: Bool) {
+            let t = ServeTransfer(peer: peer, name: filename, isUpload: isUpload,
+                                  done: Int64(done), total: Int64(total))
+            lastActive = t
             if done - lastReported >= 128 * 1024 || (total > 0 && done >= total) {
                 lastReported = done
-                server.onProgress(ServeTransfer(peer: peer, name: filename, isUpload: isUpload,
-                                                done: Int64(done), total: Int64(total)))
+                server.onProgress(t)
             }
         }
 
-        /// Mark complete; kept as a history row (finish()'s onProgress(nil)
-        /// finalizer leaves a `.done` in place).
+        /// Mark complete; kept as a history row.
         private func reportDone(done: Int, isUpload: Bool) {
+            transferDone = true
             server.onProgress(ServeTransfer(peer: peer, name: filename, isUpload: isUpload,
                                             done: Int64(done), total: Int64(done), state: .done))
         }
@@ -429,6 +435,9 @@ nonisolated final class TFTPServer: @unchecked Sendable {
             guard packet.count >= 4 else { receiveNext(); return }
             let block = UInt16(packet[packet.startIndex + 2]) << 8 | UInt16(packet[packet.startIndex + 3])
             let payload = packet.dropFirst(4)
+            retries = 0     // forward progress — reset the per-stall counter (the
+                            // read path already does this in handleAck; without it
+                            // a lossy upload accumulates retries and falsely aborts)
             if block == currentBlock &+ 1 {
                 do {
                     try handle.write(contentsOf: payload)
@@ -501,7 +510,10 @@ nonisolated final class TFTPServer: @unchecked Sendable {
                 server.log(peer: peer, isWrite: isWrite, filename: filename,
                            detail: detail, failed: failed)
             }
-            server.onProgress(nil)      // clear the live bar
+            // An interrupted transfer fails its own bar; a completed one already
+            // emitted .done and is kept as history. Sessions with no transfer
+            // (e.g. a rejected request) touch no bar.
+            if var t = lastActive, !transferDone { t.state = .failed; server.onProgress(t) }
             connection.cancel()
             server.sessionEnded(self)
         }

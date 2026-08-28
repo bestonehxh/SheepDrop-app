@@ -61,13 +61,20 @@ nonisolated final class SFTPRequestHandler {
             handle(message)
             sftp_client_message_free(message)
         }
-        onProgress(nil)     // connection closed — clear the live bar
         // The client is gone (clean or not). Release every handle it never
         // closed — each one holds a +1 OpenHandle and an open fd; a flaky
-        // device retrying pulls used to leak one fd per attempt.
+        // device retrying pulls used to leak one fd per attempt. A file handle
+        // still open here is an INTERRUPTED transfer — fail its own bar
+        // (id-scoped); a cleanly-closed transfer already emitted .done and left
+        // liveHandles, so we never touch an unrelated peer's live bar.
         for raw in liveHandles {
             let box = Unmanaged<OpenHandle>.fromOpaque(raw).takeRetainedValue()
-            if case .file(let file, _) = box.kind { try? file.close() }
+            if case .file(let file, let isWrite) = box.kind {
+                try? file.close()
+                onProgress(ServeTransfer(peer: peer, name: box.name, isUpload: isWrite,
+                                         done: box.bytes, total: max(box.total, box.bytes),
+                                         state: .failed))
+            }
             sftp_handle_remove(sftp, raw)
         }
         liveHandles.removeAll()
