@@ -1,0 +1,8 @@
+.DS_Store
+xcuserdata/
+build/
+DerivedData/
+Builds/
+tests-scratch/
+.build/
+Tests/test_host_key

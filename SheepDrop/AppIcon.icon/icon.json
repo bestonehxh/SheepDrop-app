@@ -1,0 +1,11 @@
+{
+  "fill" : { "linear-gradient" : [ "extended-srgb:0.741,0.345,0.322,1.000", "extended-srgb:0.529,0.212,0.196,1.000" ] },
+  "groups" : [
+    {
+      "layers" : [
+        { "glass" : false, "image-name" : "sheepdrop-artwork.png" }
+      ]
+    }
+  ],
+  "supported-platforms" : { "squares" : [ "macOS" ] }
+}

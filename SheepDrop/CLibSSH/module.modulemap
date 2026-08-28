@@ -1,0 +1,7 @@
+module CLibSSH [system] {
+    // Umbrella that defines WITH_SERVER before including sftp.h so the
+    // server-side SFTP API is exposed (SheepDrop's built-in SFTP server).
+    header "shim.h"
+    link "ssh"
+    export *
+}
