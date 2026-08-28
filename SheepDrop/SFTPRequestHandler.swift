@@ -15,6 +15,9 @@ nonisolated final class SFTPRequestHandler {
     private let peer: String
     private let onLog: @Sendable (TFTPLogEntry) -> Void
     private let onProgress: ServeProgress
+    /// Unique per connection, so this session's transfer bar can't be confused
+    /// with another connection's (same device IP + filename → same peer+name).
+    private let token = UUID().uuidString
     /// Raw pointers of handles currently held by libssh, so a client that
     /// drops the connection without SSH_FXP_CLOSE doesn't leak the retained
     /// OpenHandle (and its open fd) — see `loop()`.
@@ -51,7 +54,7 @@ nonisolated final class SFTPRequestHandler {
     private func reportProgress(_ box: OpenHandle, isUpload: Bool) {
         if box.bytes - box.lastReported >= 128 * 1024 || (box.total > 0 && box.bytes >= box.total) {
             box.lastReported = box.bytes
-            onProgress(ServeTransfer(peer: peer, name: box.name, isUpload: isUpload,
+            onProgress(ServeTransfer(token: token, peer: peer, name: box.name, isUpload: isUpload,
                                      done: box.bytes, total: box.total))
         }
     }
@@ -71,7 +74,7 @@ nonisolated final class SFTPRequestHandler {
             let box = Unmanaged<OpenHandle>.fromOpaque(raw).takeRetainedValue()
             if case .file(let file, let isWrite) = box.kind {
                 try? file.close()
-                onProgress(ServeTransfer(peer: peer, name: box.name, isUpload: isWrite,
+                onProgress(ServeTransfer(token: token, peer: peer, name: box.name, isUpload: isWrite,
                                          done: box.bytes, total: max(box.total, box.bytes),
                                          state: .failed))
             }
@@ -307,7 +310,7 @@ nonisolated final class SFTPRequestHandler {
                 else { log(isWrite: false, name: box.name, detail: "sent", failed: false) }
                 // Keep the completed transfer as a history row (loop()'s
                 // finalizing onProgress(nil) leaves a .done in place).
-                onProgress(ServeTransfer(peer: peer, name: box.name, isUpload: isWrite,
+                onProgress(ServeTransfer(token: token, peer: peer, name: box.name, isUpload: isWrite,
                                          done: box.bytes, total: max(box.total, box.bytes),
                                          state: .done))
             }

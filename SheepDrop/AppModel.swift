@@ -99,9 +99,11 @@ final class AppModel: ObservableObject {
     }
 
     func setSFTPPassword(_ password: String) {
-        Keychain.setPassword(password, account: Self.sftpKeychainAccount)
         cachedServerPassword = password
         objectWillChange.send()     // the ••• placeholder state changed
+        // securityd IPC off the main actor (matches the client-side fix).
+        let account = Self.sftpKeychainAccount
+        Task.detached { _ = Keychain.setPassword(password, account: account) }
     }
 
     let hostStore = HostStore()
@@ -394,14 +396,19 @@ final class AppModel: ObservableObject {
                 let model = AppModel.shared
                 guard let transfer else { return }   // bare nil no longer used
                 switch transfer.state {
-                case .active, .done:
+                case .active:
+                    // A late .active must not un-finish the SAME transfer's
+                    // already-shown .done (unstructured Tasks aren't FIFO).
+                    if let cur = model.activeServeTransfer, cur.id == transfer.id,
+                       cur.state == .done { return }
+                    model.activeServeTransfer = transfer
+                case .done:
                     model.activeServeTransfer = transfer
                 case .failed:
-                    // Only fail the shown bar if it IS this transfer. Without the
-                    // id check, one connection ending would flip an unrelated
-                    // concurrent transfer's live bar to "failed", or clobber a
-                    // just-completed .done held as history.
-                    if let cur = model.activeServeTransfer, cur.id != transfer.id { return }
+                    // Only update the bar if THIS transfer is the one shown —
+                    // never fail an unrelated concurrent transfer, clobber a held
+                    // .done, or resurrect a bar the server-stop already cleared.
+                    guard let cur = model.activeServeTransfer, cur.id == transfer.id else { return }
                     model.activeServeTransfer = transfer
                 }
             }

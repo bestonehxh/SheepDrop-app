@@ -444,11 +444,19 @@ final class SFTPSession: ObservableObject {
         }
         if let posix = error as? POSIXError { return dead.contains(posix.code) }
         if let message = (error as? SFTPError)?.message.lowercased() {
-            // libssh reports a dropped transport with strings like
-            // "Socket error: Connection reset by peer" / "Timeout" — wrapped by
-            // doList as "cannot open <path>: <that>". Match the real transport-
-            // death tokens, not just the three we happened to see first, or a
-            // mid-session reset leaves the tab stuck "connected" on a stale list.
+            // FTPWorker errors embed the server's reply verbatim ("FTP <code>
+            // …"). A 4xx/5xx on a DATA transfer ("426 Connection closed",
+            // "451 … timeout") means that transfer failed, not the control
+            // connection — tearing the session down would force a needless
+            // re-login. Only 421 (service closing) is a real control-conn loss.
+            if message.hasPrefix("ftp ") {
+                return message.contains("421") || message.contains("not connected")
+            }
+            // SSH/SFTP transport death — libssh reports "Socket error:
+            // Connection reset by peer" / "Timeout" etc. (wrapped by doList as
+            // "cannot open <path>: <that>"). Match the real transport tokens, not
+            // just the three we happened to see first, or a mid-session reset
+            // leaves the tab stuck "connected" on a stale listing.
             let dead = ["not connected", "connection closed", "disconnect",
                         "socket error", "reset by peer", "connection reset",
                         "broken pipe", "timed out", "timeout", "no route to host",

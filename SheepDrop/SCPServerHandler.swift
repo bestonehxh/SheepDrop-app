@@ -19,6 +19,8 @@ nonisolated final class SCPServerHandler {
     private let peer: String
     private let onLog: @Sendable (TFTPLogEntry) -> Void
     private let onProgress: ServeProgress
+    /// Unique per connection — see ServeTransfer.token.
+    private let token = UUID().uuidString
 
     init(channel: ssh_channel, command: String, root: URL,
          allowWrites: @escaping @Sendable () -> Bool,
@@ -43,7 +45,7 @@ nonisolated final class SCPServerHandler {
     /// large firmware image doesn't flood the main actor.
     private func reportProgress(name: String, isUpload: Bool, done: Int64, total: Int64,
                                 lastReported: inout Int64) {
-        let t = ServeTransfer(peer: peer, name: name, isUpload: isUpload, done: done, total: total)
+        let t = ServeTransfer(token: token, peer: peer, name: name, isUpload: isUpload, done: done, total: total)
         lastActive = t
         if done - lastReported >= 128 * 1024 || done >= total {
             lastReported = done
@@ -54,7 +56,7 @@ nonisolated final class SCPServerHandler {
     /// Mark the bar complete; it is kept as a history row.
     private func reportDone(name: String, isUpload: Bool, total: Int64) {
         completed = true
-        onProgress(ServeTransfer(peer: peer, name: name, isUpload: isUpload,
+        onProgress(ServeTransfer(token: token, peer: peer, name: name, isUpload: isUpload,
                                  done: total, total: total, state: .done))
     }
 

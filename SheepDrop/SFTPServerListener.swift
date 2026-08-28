@@ -105,6 +105,10 @@ nonisolated final class SFTPServerListener: @unchecked Sendable {
     /// close). The loop then exits and frees the bind on its own thread.
     func stop() {
         stateLock.lock()
+        // Idempotent: a second stop() (the supersession guard can call stop on a
+        // server setSFTPServer(off) already stopped) must NOT re-read `bind` and
+        // race the accept loop's ssh_bind_free. Already stopped ⇒ nothing to do.
+        guard running else { stateLock.unlock(); return }
         running = false
         let bind = bind
         stateLock.unlock()

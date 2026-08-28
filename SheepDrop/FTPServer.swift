@@ -76,6 +76,10 @@ nonisolated final class FTPServer: @unchecked Sendable {
                         case .failed(let error) where !resumed.value:
                             resumed.value = true; candidate.cancel()
                             continuation.resume(throwing: error)
+                        case .cancelled where !resumed.value:
+                            // Stopped before .ready — resume or the start() Task leaks.
+                            resumed.value = true
+                            continuation.resume(throwing: SFTPError(message: "server stopped before it began listening"))
                         default: break
                         }
                     }

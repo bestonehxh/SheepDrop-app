@@ -12,20 +12,26 @@ struct TFTPLogEntry: Identifiable, Sendable {
     var failed: Bool
 }
 
-/// A transfer currently in flight on any built-in server (TFTP/SFTP/SCP/FTP),
-/// shown as a live progress bar under the Serve view's request log. `total == 0`
-/// means the size is unknown (indeterminate bar). `isUpload` is from the
-/// device's point of view: true = the device is pushing a file TO this Mac.
+/// A transfer currently in flight on a TFTP/SFTP/SCP server (FTP is not wired to
+/// the bar yet), shown as a live progress bar under the Serve view's request
+/// log. `total == 0` means the size is unknown (indeterminate bar). `isUpload`
+/// is from the device's point of view: true = the device is pushing a file TO
+/// this Mac.
 struct ServeTransfer: Identifiable, Equatable, Sendable {
     enum State: Sendable { case active, done, failed }
+    /// Per-CONNECTION token. Two connections from the same device IP pulling the
+    /// same filename (a flaky device retrying) would otherwise share an id, so
+    /// the dead attempt's `.failed` could flip the retry's live bar to failed.
+    let token: String
     let peer: String
     let name: String
     let isUpload: Bool
     var done: Int64
     var total: Int64
     var state: State = .active
-    /// peer+name, so repeated progress ticks for one transfer coalesce.
-    var id: String { peer + "\u{1}" + name }
+    /// Unique per connection+file, so ticks for one transfer coalesce but a
+    /// different attempt (even same peer+name) is a distinct bar.
+    var id: String { token + "\u{1}" + peer + "\u{1}" + name }
 }
 
 /// Progress sink passed to every server:
@@ -124,6 +130,13 @@ nonisolated final class TFTPServer: @unchecked Sendable {
                             } else {
                                 self.listener = nil
                             }
+                        case .cancelled:
+                            // Stopped before it reached .ready — resume the
+                            // continuation or the start() Task leaks forever.
+                            if !resumed.value {
+                                resumed.value = true
+                                continuation.resume(throwing: SFTPError(message: "server stopped before it began listening"))
+                            }
                         default:
                             break
                         }
@@ -194,6 +207,10 @@ nonisolated final class TFTPServer: @unchecked Sendable {
         private var generation = 0
         private var finished = false
         private var sentFinal = false
+        /// Unique per session — see ServeTransfer.token. (The peer already
+        /// carries the ephemeral UDP port, but keep it uniform with the SSH
+        /// handlers.)
+        private let token = UUID().uuidString
 
         init(server: TFTPServer, connection: NWConnection, peerOverride: String? = nil) {
             self.server = server
@@ -215,6 +232,10 @@ nonisolated final class TFTPServer: @unchecked Sendable {
 
         func cancel() {
             finished = true
+            // Stopping the server mid-transfer must fail this transfer's bar —
+            // finish() won't run once finished is set, so emit it here (id-scoped)
+            // or the bar would hang .active while another server keeps running.
+            if var t = lastActive, !transferDone { t.state = .failed; server.onProgress(t) }
             connection.cancel()
         }
 
@@ -399,7 +420,7 @@ nonisolated final class TFTPServer: @unchecked Sendable {
         private var lastActive: ServeTransfer?
         private var transferDone = false
         private func reportProgress(done: Int, total: Int, isUpload: Bool) {
-            let t = ServeTransfer(peer: peer, name: filename, isUpload: isUpload,
+            let t = ServeTransfer(token: token, peer: peer, name: filename, isUpload: isUpload,
                                   done: Int64(done), total: Int64(total))
             lastActive = t
             if done - lastReported >= 128 * 1024 || (total > 0 && done >= total) {
@@ -411,7 +432,7 @@ nonisolated final class TFTPServer: @unchecked Sendable {
         /// Mark complete; kept as a history row.
         private func reportDone(done: Int, isUpload: Bool) {
             transferDone = true
-            server.onProgress(ServeTransfer(peer: peer, name: filename, isUpload: isUpload,
+            server.onProgress(ServeTransfer(token: token, peer: peer, name: filename, isUpload: isUpload,
                                             done: Int64(done), total: Int64(done), state: .done))
         }
 
